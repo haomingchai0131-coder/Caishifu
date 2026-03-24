@@ -36,6 +36,37 @@
     </div>
 </div>
 
+<!-- 支付弹窗 -->
+<div id="payment-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+    <div class="bg-white rounded-3xl p-8 max-w-md w-full mx-4 text-center">
+        <h2 class="text-3xl font-bold mb-4">💳 确认支付</h2>
+        <p class="text-xl mb-2">订单号：<span id="modal-order-num" class="font-mono font-bold text-red-600"></span></p>
+        <p class="text-5xl font-bold text-red-600 my-6">¥ <span id="modal-total"></span></p>
+        <button onclick="completePayment()" 
+                class="w-full bg-green-600 hover:bg-green-700 text-white py-4 rounded-2xl text-2xl font-bold mb-4">
+            ✅ 模拟支付完成
+        </button>
+        <button onclick="closePaymentModal()" 
+                class="w-full bg-gray-200 hover:bg-gray-300 text-gray-700 py-4 rounded-2xl text-2xl font-bold">
+            取消
+        </button>
+    </div>
+</div>
+
+<!-- 成功弹窗 -->
+<div id="success-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+    <div class="bg-white rounded-3xl p-8 max-w-md w-full mx-4 text-center">
+        <div class="text-7xl mb-6">🎉</div>
+        <h2 class="text-3xl font-bold mb-2">订单提交成功！</h2>
+        <p class="text-xl mb-6">订单号：<span id="order-number" class="font-mono font-bold text-red-600"></span></p>
+        <p class="text-gray-600 mb-8">厨房已收到，我们马上为您准备～</p>
+        <button onclick="finishOrder()" 
+                class="w-full bg-red-600 hover:bg-red-700 text-white py-4 rounded-2xl text-2xl font-bold">
+            关闭并继续点餐
+        </button>
+    </div>
+</div>
+
 <script>
 // ==================== 菜品数据 ====================
 const dishes = [
@@ -90,18 +121,28 @@ function renderMenu() {
 function addToCart(id) {
     const dish = dishes.find(d => d.id === id);
     const existing = cart.find(item => item.id === id);
-    if (existing) existing.qty += 1; else cart.push({...dish, qty: 1});
+    if (existing) {
+        existing.qty += 1;
+    } else {
+        cart.push({...dish, qty: 1});
+    }
     renderCart();
 }
+
 function changeQty(id, change) {
     const item = cart.find(i => i.id === id);
-    if (item) { item.qty += change; if (item.qty <= 0) cart = cart.filter(i => i.id !== id); }
+    if (item) {
+        item.qty += change;
+        if (item.qty <= 0) cart = cart.filter(i => i.id !== id);
+    }
     renderCart();
 }
+
 function removeFromCart(id) {
     cart = cart.filter(item => item.id !== id);
     renderCart();
 }
+
 function renderCart() {
     const container = document.getElementById('cart-items');
     container.innerHTML = '';
@@ -126,10 +167,10 @@ function renderCart() {
         total += item.price * item.qty;
     });
     document.getElementById('total-price').textContent = total;
-    document.getElementById('cart-count').textContent = cart.length;
+    document.getElementById('cart-count').textContent = cart.reduce((sum, item) => sum + item.qty, 0);
 }
 
-// ==================== 新增：保存到 localStorage（厨房后台实时接收） ====================
+// ==================== 保存订单到 localStorage ====================
 function saveOrderToLocal(order) {
     let orders = JSON.parse(localStorage.getItem('caishifu_orders')) || [];
     orders.unshift(order);
@@ -137,42 +178,35 @@ function saveOrderToLocal(order) {
     localStorage.setItem('caishifu_orders', JSON.stringify(orders));
 }
 
-// ==================== 发送订单（webhook 备用） ====================
+// ==================== 发送到 webhook ====================
 async function sendOrderToWebhook(order) {
     const webhookUrl = "https://webhook.site/1bc209a4-63f6-4747-912a-74647a1a9d70";
     const proxyUrl = "https://api.allorigins.win/raw?url=" + encodeURIComponent(webhookUrl);
-
     const payload = {
         orderNum: order.orderNum,
+        time: order.time,
+        items: order.items,
         total: order.total,
-        time: new Date().toLocaleString('zh-CN'),
-        items: order.items.map(item => ({
-            name: item.name,
-            qty: item.qty,
-            price: item.price,
-            subtotal: item.price * item.qty
-        }))
+        status: order.status
     };
-
     try {
-        const res = await fetch(proxyUrl, {
+        await fetch(proxyUrl, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(payload)
         });
-        if (res.ok) console.log("✅ 已推送到 webhook.site");
+        console.log("✅ 已推送到 webhook.site");
     } catch (err) {
         console.error("webhook推送失败", err);
     }
 }
 
-// ==================== 提交订单（已删除支付宝，直接提交） ====================
+// ==================== 提交订单 ====================
 function submitOrder() {
-    if (cart.length === 0) { 
-        alert("购物车是空的哦～先加几道菜吧！"); 
-        return; 
+    if (cart.length === 0) {
+        alert("购物车是空的哦～先加几道菜吧！");
+        return;
     }
-
     const total = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
     const orderNum = "KL" + Math.floor(100000 + Math.random() * 900000);
     
@@ -184,11 +218,22 @@ function submitOrder() {
         status: "pending"
     };
 
-    // 🔥 直接保存到本地 + webhook
     saveOrderToLocal(currentOrder);
+
+    document.getElementById('modal-total').textContent = total;
+    document.getElementById('modal-order-num').textContent = orderNum;
+    document.getElementById('payment-modal').classList.remove('hidden');
+}
+
+function closePaymentModal() {
+    document.getElementById('payment-modal').classList.add('hidden');
+}
+
+function completePayment() {
+    if (!currentOrder) return;
+    closePaymentModal();
     sendOrderToWebhook(currentOrder);
 
-    // 显示成功弹窗
     document.getElementById('order-number').textContent = currentOrder.orderNum;
     document.getElementById('success-modal').classList.remove('hidden');
 }
@@ -204,20 +249,9 @@ function finishOrder() {
 // 初始化
 renderMenu();
 </script>
-
-<!-- 成功弹窗（已修改文案） -->
-<div id="success-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-[60]">
-    <div class="bg-white w-full max-w-md mx-4 rounded-3xl p-8 text-center">
-        <div class="text-6xl mb-6">🎉</div>
-        <h2 class="text-4xl font-bold text-green-600">订单提交成功！</h2>
-        <p class="text-2xl mt-4">订单号：<span id="order-number" class="font-mono bg-gray-100 px-3 py-1 rounded"></span></p>
-        <p class="text-xl mt-8 text-gray-600">订单已正式提交！<br>我们马上为您准备～</p>
-        <button onclick="finishOrder()" class="mt-10 w-full bg-green-600 text-white text-2xl font-bold py-5 rounded-3xl">返回菜单</button> 
-    </div>
-</div>
-
 </body>
 </html>
+
 <!DOCTYPE html>
 <html lang="zh">
 <head>
@@ -283,8 +317,7 @@ function loadOrders() {
                 `).join('')}
             </div>
 
-            <div class="flex
-						justify-between items-center text-2xl font-bold border-t pt-4">
+            <div class="flex justify-between items-center text-2xl font-bold border-t pt-4">
                 <span>总计：¥ <span class="text-red-600">${order.total}</span></span>
                 ${order.status !== 'completed' ? 
                     `<button onclick="completeOrder(${index})" class="bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-2xl text-xl">
@@ -298,7 +331,6 @@ function loadOrders() {
     document.getElementById('last-update').textContent = `最后更新：${new Date().toLocaleTimeString('zh-CN')}`;
 }
 
-// 标记订单为已完成
 function completeOrder(index) {
     orders[index].status = 'completed';
     localStorage.setItem('caishifu_orders', JSON.stringify(orders));
