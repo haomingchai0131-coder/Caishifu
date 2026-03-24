@@ -197,5 +197,25 @@ function finishOrder() {
 
 renderMenu();
 </script>
+<!-- Firebase SDK (最适合纯HTML) -->
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+
+<script>
+  // 🔥 你的 Firebase 配置（已自动填好）
+  const firebaseConfig = {
+    apiKey: "AIzaSyC9IsHbiJyEc97-sVMVN0iOda7m8Icb0Eo",
+    authDomain: "caishifuoder-9ee58.firebaseapp.com",
+    projectId: "caishifuoder-9ee58",
+    storageBucket: "caishifuoder-9ee58.firebasestorage.app",
+    messagingSenderId: "933419899359",
+    appId: "1:933419899359:web:4954542e0141191fc44c6a",
+    measurementId: "G-EZMND60HK7"
+  };
+
+  // 初始化 Firebase
+  const app = firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+</script>
 </body>
 </html>
