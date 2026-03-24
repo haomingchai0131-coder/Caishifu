@@ -15,77 +15,75 @@
 <div class="max-w-5xl mx-auto">
     <div class="flex justify-between items-center mb-8">
         <h1 class="text-4xl font-bold flex items-center gap-3">👨‍🍳 蔡师傅厨房后台</h1>
-        <button onclick="loadOrders()" class="bg-green-600 hover:bg-green-700 px-6 py-3 rounded-2xl font-bold flex items-center gap-2">🔄 手动刷新</button>
     </div>
     <div id="orders-list" class="space-y-6"></div>
 </div>
 
-<script>
-let orders = [];
+<!-- 声音提示 -->
+<audio id="newOrderSound" src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"></audio>
 
-function loadOrders() {
-    orders = JSON.parse(localStorage.getItem('caishifu_orders')) || [];
+<script>
+// Firebase 初始化
+const firebaseConfig = {
+  apiKey: "AIzaSyC9IsHbiJyEc97-sVMVN0iOda7m8Icb0Eo",
+  authDomain: "caishifuoder-9ee58.firebaseapp.com",
+  projectId: "caishifuoder-9ee58",
+  storageBucket: "caishifuoder-9ee58.firebasestorage.app",
+  messagingSenderId: "933419899359",
+  appId: "1:933419899359:web:4954542e0141191fc44c6a",
+  measurementId: "G-EZMND60HK7"
+};
+const app = firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// 实时监听
+const ordersRef = db.ref('orders');
+ordersRef.on('value', (snapshot) => {
     const container = document.getElementById('orders-list');
     container.innerHTML = '';
 
-    if (orders.length === 0) {
-        container.innerHTML = `<div class="text-center py-20 text-gray-400 text-2xl">暂无新订单～</div>`;
+    const data = snapshot.val();
+    if (!data) {
+        container.innerHTML = `<div class="text-center py-20 text-gray-400 text-2xl">暂无新订单～<br>等待顾客下单</div>`;
         return;
     }
 
-    orders.forEach((order, index) => {
+    let hasNew = false;
+    Object.keys(data).forEach(key => {
+        const order = data[key];
+        if (order.status === "pending") hasNew = true;
+
         const div = document.createElement('div');
-        div.className = `order-card bg-white text-gray-900 rounded-3xl p-6 shadow-xl ${order.status === 'completed' ? 'opacity-75' : ''}`;
+        div.className = `order-card bg-white text-gray-900 rounded-3xl p-6 shadow-xl`;
         div.innerHTML = `
             <div class="flex justify-between items-start mb-4">
                 <div>
                     <span class="font-mono text-3xl font-bold text-red-600">${order.orderNum}</span>
                     <span class="ml-4 text-sm text-gray-500">${order.time}</span>
                 </div>
-                <span class="px-4 py-1 rounded-full text-sm font-bold ${order.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
-                    ${order.status === 'completed' ? '✅ 已完成' : '⏳ 待接单'}
-                </span>
+                <span class="px-4 py-1 rounded-full text-sm font-bold bg-red-100 text-red-700">待接单</span>
             </div>
             <div class="grid grid-cols-2 gap-4 mb-6">
                 ${order.items.map(item => `<div class="flex justify-between text-lg"><span>${item.name}</span><span class="font-bold">× ${item.qty}</span></div>`).join('')}
             </div>
             <div class="flex justify-between items-center text-2xl font-bold border-t pt-4">
                 <span>总计：¥ <span class="text-red-600">${order.total}</span></span>
-                ${order.status !== 'completed' ? `<button onclick="completeOrder(${index})" class="bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-2xl text-xl">✅ 接单完成</button>` : ''}
+                <button onclick="completeOrder('${key}')" class="bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-2xl text-xl">✅ 接单完成</button>
             </div>
         `;
         container.appendChild(div);
     });
-}
 
-function completeOrder(index) {
-    orders[index].status = 'completed';
-    localStorage.setItem('caishifu_orders', JSON.stringify(orders));
-    loadOrders();
-}
+    if (hasNew) document.getElementById('newOrderSound').play();
+});
 
-setInterval(loadOrders, 3000);
-loadOrders();
+window.completeOrder = function(key) {
+    db.ref('orders/' + key).update({ status: "completed" });
+};
 </script>
-<!-- Firebase SDK (最适合纯HTML) -->
+
+<!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
-
-<script>
-  // 🔥 你的 Firebase 配置（已自动填好）
-  const firebaseConfig = {
-    apiKey: "AIzaSyC9IsHbiJyEc97-sVMVN0iOda7m8Icb0Eo",
-    authDomain: "caishifuoder-9ee58.firebaseapp.com",
-    projectId: "caishifuoder-9ee58",
-    storageBucket: "caishifuoder-9ee58.firebasestorage.app",
-    messagingSenderId: "933419899359",
-    appId: "1:933419899359:web:4954542e0141191fc44c6a",
-    measurementId: "G-EZMND60HK7"
-  };
-
-  // 初始化 Firebase
-  const app = firebase.initializeApp(firebaseConfig);
-  const db = firebase.database();
-</script>
 </body>
 </html>
