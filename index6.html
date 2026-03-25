@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>蔡师傅 - 厨房后台</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+
+<style>
+body {
+    font-family: "Microsoft YaHei", sans-serif;
+    background: linear-gradient(135deg,#0f172a,#1e293b);
+}
+
+.order-card { transition: 0.25s; }
+.order-card:hover { transform: translateY(-3px); }
+
+.new-order {
+    border-left: 5px solid #ef4444;
+    animation: pulse .6s ease 2;
+}
+
+@keyframes pulse {
+    0% { box-shadow:0 0 0 0 rgba(239,68,68,0.5);}
+    70% { box-shadow:0 0 0 12px rgba(239,68,68,0);}
+    100% { box-shadow:0 0 0 0 rgba(239,68,68,0);}
+}
+</style>
+</head>
+
+<body class="p-6">
+
+<div class="max-w-5xl mx-auto">
+
+<div class="flex justify-between items-center mb-6 bg-gray-800/60 p-5 rounded-2xl text-white">
+<h1 class="text-3xl font-bold">👨‍🍳 厨房后台</h1>
+
+<span id="online-status" class="text-green-400">
+🟢 连接中...
+</span>
+</div>
+
+<div id="orders-list" class="space-y-5"></div>
+
+</div>
+
+<audio id="newOrderSound">
+<source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3">
+</audio>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
+import { getDatabase, ref, onValue, update, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-database.js";
+
+const firebaseConfig = {
+apiKey: "AIzaSyC9IsHbiJyEc97-sVMVN0iOda7m8Icb0Eo",
+authDomain: "caishifuoder-9ee58.firebaseapp.com",
+projectId: "caishifuoder-9ee58"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const ordersRef = ref(db,"orders");
+
+let previousKeys = new Set();
+
+/* 声音 */
+function playSound(){
+const audio=document.getElementById("newOrderSound");
+audio.currentTime=0;
+audio.play().catch(()=>{});
+}
+
+/* 渲染 */
+function renderOrders(data){
+
+const container=document.getElementById("orders-list");
+
+if(!data){
+container.innerHTML=`<div class="text-center text-gray-400 text-xl">暂无订单</div>`;
+previousKeys.clear();
+return;
+}
+
+const entries = Object.entries(data)
+.filter(([k,o])=>o.status!=="completed");
+
+/* 排序 */
+entries.sort((a,b)=> (b[1].timestamp||0)-(a[1].timestamp||0));
+
+/* 检测新订单（修复点🔥） */
+const currentKeys = new Set(entries.map(([k])=>k));
+
+let newKeys = [];
+for(let k of currentKeys){
+if(!previousKeys.has(k)){
+newKeys.push(k);
+}
+}
+
+/* 有新订单 */
+if(newKeys.length>0 && previousKeys.size>0){
+playSound();
+}
+
+/* 更新记录 */
+previousKeys = currentKeys;
+
+container.innerHTML="";
+
+/* 渲染 */
+entries.forEach(([key,order])=>{
+
+const isNew = newKeys.includes(key);
+
+const div=document.createElement("div");
+div.className=`order-card bg-white p-5 rounded-2xl shadow-xl ${isNew?'new-order':''}`;
+
+const time = order.timestamp
+? new Date(order.timestamp).toLocaleString("zh-CN")
+: order.time || "刚刚";
+
+div.innerHTML=`
+<div class="flex justify-between mb-3">
+<div>
+<span class="text-2xl font-bold text-red-500">${order.orderNum}</span>
+<p class="text-gray-400 text-sm">${time}</p>
+</div>
+<span class="bg-red-100 text-red-600 px-3 py-1 rounded-full">待处理</span>
+</div>
+
+<div class="bg-gray-50 p-3 rounded-xl mb-3">
+${(order.items||[]).map(i=>`
+<div class="flex justify-between text-sm">
+<span>${i.name}</span>
+<span>x${i.qty}</span>
+</div>`).join("")}
+</div>
+
+<div class="flex justify-between items-center">
+<span class="font-bold text-lg">¥${order.total}</span>
+<button onclick="completeOrder('${key}')"
+class="bg-green-600 text-white px-4 py-2 rounded-lg">
+完成
+</button>
+</div>
+`;
+
+container.appendChild(div);
+});
+
+document.getElementById("online-status").innerText="🟢 已同步";
+}
+
+/* 完成订单 */
+window.completeOrder = async function(key){
+if(!confirm("确认完成？")) return;
+
+await update(ref(db,`orders/${key}`),{
+status:"completed",
+completedTime:serverTimestamp()
+});
+};
+
+/* 监听 */
+onValue(ordersRef,(snap)=>{
+renderOrders(snap.val());
+},()=>{
+document.getElementById("online-status").innerText="🔴 连接失败";
+});
+
+</script>
+
+</body>
+</html>
